@@ -43,48 +43,57 @@ class DiabetesModel(nn.Module):
 
 # 4. Cross-validation loop
 lr_list = [1e-3,1e-2,1e-1]
-hidden_list = [32, 64, 128]
+hidden_layer_list = [32, 64, 128]
 
 best_config = None
 best_cv_mse = float('inf')
-mse_scores = []
 
-for fold, (train_idx, val_idx) in enumerate(kf.split(x_trainval), 1):
-    # a) Split data for this fold
-    x_train = torch.tensor(x_trainval[train_idx], dtype=torch.float32)
-    y_train = torch.tensor(y_trainval[train_idx], dtype=torch.float32).view(-1, 1)
-    x_test  = torch.tensor(x_trainval[val_idx],  dtype=torch.float32)
-    y_test  = torch.tensor(y_trainval[val_idx],  dtype=torch.float32).view(-1, 1)
+for lr in lr_list:
+    for layer in hidden_layer_list:
+        mse_scores = []
+        for fold, (train_idx, val_idx) in enumerate(kf.split(x_trainval), 1):
+            # a) Split data for this fold
+            x_train = torch.tensor(x_trainval[train_idx], dtype=torch.float32)
+            y_train = torch.tensor(y_trainval[train_idx], dtype=torch.float32).view(-1, 1)
+            x_test  = torch.tensor(x_trainval[val_idx],  dtype=torch.float32)
+            y_test  = torch.tensor(y_trainval[val_idx],  dtype=torch.float32).view(-1, 1)
 
-    model     = DiabetesModel()
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+            model     = DiabetesModel(layer)
+            criterion = nn.MSELoss()
+            optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    # c) Training
-    for epoch in range(epochs):
-        model.train()
-        preds = model(x_train)
-        loss  = criterion(preds, y_train)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            # c) Training
+            for epoch in range(epochs):
+                model.train()
+                preds = model(x_train)
+                loss  = criterion(preds, y_train)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
-    # d) Evaluate on this fold's test set
-    model.eval()
-    with torch.no_grad():
-        preds = model(x_test)
-        mse   = criterion(preds, y_test).item()
-    mse_scores.append(mse)
-    print(f"Fold {fold}/{n_splits} - Val MSE: {mse:.4f}")
+            # d) Evaluate on this fold's test set
+            model.eval()
+            with torch.no_grad():
+                preds = model(x_test)
+                mse   = criterion(preds, y_test).item()
+            mse_scores.append(mse)
+            print(f"Fold {fold}/{n_splits} - Val MSE: {mse:.4f}")
 
-# 5. Summarize cross-validation results
-mean_mse = np.mean(mse_scores)
-std_mse  = np.std(mse_scores)
-print(f"\nCV MSE: {mean_mse:.4f} ± {std_mse:.4f}")
+        # 5. Summarize cross-validation results
+        mean_mse = np.mean(mse_scores)
+        std_mse  = np.std(mse_scores)
+        print(f"lr={lr}, hidden layer={layer}, CV MSE: {mean_mse:.4f} ± {std_mse:.4f}\n")
+        if mean_mse < best_cv_mse:
+            best_cv_mse = mean_mse
+            best_config = (lr, layer)
+
+print(f"Best config: lr={best_config[0]}, hidden={best_config[1]}(CV MSE={best_cv_mse:.4f})\n")
 
 # 6. Retrain final model on full trainval set
+lr, layer = best_config
 x_full = torch.tensor(x_trainval, dtype=torch.float32)
 y_full = torch.tensor(y_trainval, dtype=torch.float32).view(-1, 1)
+criterion = nn.MSELoss()
 model = DiabetesModel()
 optimizer = optim.Adam(model.parameters(), lr=lr)
 
@@ -105,9 +114,13 @@ with torch.no_grad():
     mse = criterion(test_predictions, Y_test)
 print(f"Test MSE: {mse:.4f}")
 
+# Save the final trained model's state dictionary
+model_save_path = 'best.pt'
+torch.save(model.state_dict(), model_save_path)
+print(f'Model saved to {model_save_path}')
+
 # … after printing CV MSE …
 import matplotlib.pyplot as plt
-
 # 1. Prepare x-axis as fold numbers 1…n_splits
 folds = np.arange(1, len(mse_scores) + 1)
 
