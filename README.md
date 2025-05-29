@@ -1,6 +1,6 @@
 # Diabetes Progression Prediction with PyTorch
 
-This project uses a simple neural network built with PyTorch to predict diabetes progression based on baseline patient data. It employs K-Fold Cross-Validation for hyperparameter tuning and evaluates the final model on a held-out test set.
+This project uses a simple neural network built with PyTorch to predict diabetes progression based on baseline patient data. The highlight is that it employs K-Fold Cross-Validation for hyperparameter tuning and evaluates the final model on a held-out test set. By using this method with manually tuning, there was a significant improvement in the loss in testing.
 
 ## Dataset
 
